@@ -9,10 +9,8 @@ import {
   CreateBucketCommand,
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
-
 import * as path from "path";
-
-const SCALEWAY_BUCKET_NAME = "excalidraw-qonfucius";
+import "dotenv/config";
 
 const PROJECT_NAME = process.env.GOOGLE_CLOUD_PROJECT || "excalidraw-json-dev";
 const PROD = PROJECT_NAME === "excalidraw-json";
@@ -31,35 +29,77 @@ const storage = new Storage(
     : undefined
 );
 
-/*const scalewayBucket = new S3Client({
-  endpoint: process.env.ENDPOINT || "https://excalidraw-qonfucius.s3.fr-par.scw.cloud",
-  region: process.env.REGION || "PAR",
+// Création bucket scaleway
+
+const client = new S3Client({
+  endpoint: process.env.ENDPOINT,
+  region: process.env.REGION,
   credentials: {
-    accessKeyId: process.env.KEY_ID || "SCWMN65YHQH2RBY3XSVB",
-    secretAccessKey: process.env.SECRET_KEY || "fbd2ad05-3113-4dd3-b579-3f440b18026d",
+    accessKeyId: process.env.ACCESS_KEY_ID as string,
+    secretAccessKey: process.env.SECRET_ACCESS_KEY as string,
   },
-});*/
+});
 
-// DÉBUT TENTATIVE
+//Tests fonctionnels + get -> permet d'avoir un body lisible
 
-const client = new S3Client({});
+// PUT
+/*
+(async () => {
+  const response = await client.send(new PutObjectCommand({Bucket: process.env.SCALEWAY_BUCKET_NAME,Key:"tata.txt", Body: "toto"}));
+  console.log(response);
+})();
+*/
 
-export const main = async () => {
-  const command = new CreateBucketCommand({
-    Bucket: "excalidraw-qonfucius",
+//GET
+/*
+(async () => {
+  const client = new S3Client({
+    endpoint: process.env.ENDPOINT,
+    region: process.env.REGION,
+    credentials:{
+      accessKeyId: process.env.ACCESS_KEY_ID as string,
+      secretAccessKey: process.env.SECRET_ACCESS_KEY as string
+    }
   });
 
-  try {
-    const { Location } = await client.send(command);
-    console.log(`Bucket created with location ${Location}`);
-  } catch (err) {
-    console.error(err);
-  }
-};
+  const streamToString = (stream: any) =>
+      new Promise((resolve, reject) => {
+        const chunks: any = [];
+        stream.on("data", (chunk: any) => chunks.push(chunk));
+        stream.on("error", reject);
+        stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+      });
 
-//FIN TENTATIVE
+  const command = new GetObjectCommand({
+    Bucket:  process.env.SCALEWAY_BUCKET_NAME,
+    Key: "toto.txt",
+  });
+
+  const { Body } = await client.send(command);
+  const bodyContents = await streamToString(Body);
+  console.log(bodyContents);
+})();
+*/
 
 const bucket = storage.bucket(BUCKET_NAME);
+
+// Fonction permettant de savoir quel bucket est utilisé
+function getStorageType() {
+  if (
+    (process.env.SCALEWAY_BUCKET_NAME,
+    process.env.ENDPOINT,
+    process.env.REGION,
+    process.env.ACCESS_KEY_ID,
+    process.env.SECRET_ACCESS_KEY)
+  ) {
+    const storageType = "S3";
+    return storageType;
+  } else {
+    const storageType = "GCS";
+    return storageType;
+  }
+}
+
 const app = express();
 
 let allowOrigins = [
@@ -91,25 +131,37 @@ app.use(favicon(path.join(__dirname, "favicon.ico")));
 app.get("/", (req, res) => res.sendFile(`${process.cwd()}/index.html`));
 
 app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
-  //TENTATIVE GET DÉBUT
+  //Début essai nouvelle condition GET
 
-  if (SCALEWAY_BUCKET_NAME) {
-    //const main = async () => {
-    const command = new GetObjectCommand({
-      Bucket: "excalidraw-qonfucius",
-      Key: "fbd2ad05-3113-4dd3-b579-3f440b18026d",
-    });
-
+  if (getStorageType() === "S3") {
     try {
-      const response = await client.send(command);
-      const str = await res.Body.transformToString();
-      console.log(str);
-    } catch (err) {
-      console.error(err);
+      await (async () => {
+        const streamToString = (stream: any) =>
+          new Promise((resolve, reject) => {
+            const chunks: any = [];
+            stream.on("data", (chunk: any) => chunks.push(chunk));
+            stream.on("error", reject);
+            stream.on("end", () =>
+              resolve(Buffer.concat(chunks).toString("utf8"))
+            );
+          });
+
+        const key = req.params.key;
+
+        const command = new GetObjectCommand({
+          Bucket: process.env.SCALEWAY_BUCKET_NAME,
+          Key: key, // Voir si ça marche pour key étant donné que j'ai juste repris le code d'en dessous
+        });
+
+        const { Body } = await client.send(command);
+        const bodyContents = await streamToString(Body);
+        console.log(bodyContents);
+      })();
+    } catch (error) {
+      console.error(error);
+      res.status(404).json({ message: "Could not find the file." });
     }
-    //}
-  } else {
-    //TENTATIVE GET FIN
+  } else if (getStorageType() === "GCS") {
     try {
       const key = req.params.key;
       const file = bucket.file(key);
@@ -124,27 +176,72 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
   }
 });
 
-app.post("/api/v2/post/", corsPost, (req, res) => {
-  //TENTATIVE PUT DÉBUT
+// Premier essai post mais le 2ème est peut-être plus "élégant" ?
 
-  if (SCALEWAY_BUCKET_NAME) {
-    //const main = async () => {
-    const command = new PutObjectCommand({
-      Bucket: "excalidraw-qonfucius",
-      Key: "fbd2ad05-3113-4dd3-b579-3f440b18026d",
-      Body: "??", //SAVOIR COMMENT FILER FICHIER JSON
-    });
-
+/*app.post("/api/v2/post/", corsPost, (req, res) => {
+  if (getStorageType() === "S3") {
     try {
-      const response = client.send(command);
+    (async () => {
+      const response = await client.send(new PutObjectCommand({Bucket: process.env.SCALEWAY_BUCKET_NAME,Key:"tata.txt", Body: "toto"}));
       console.log(response);
-    } catch (err) {
-      console.error(err);
+    })();
+    }catch (error) {
+      console.error(error);
+      res.status(500).json({message: "Could not upload the data."});
     }
-    //}
-  } else {
-    //TENTATIVE PUT FIN
 
+  } else {
+    try {
+      let fileSize = 0;
+      const id = nanoid();
+      const blob = bucket.file(id);
+      const blobStream = blob.createWriteStream({resumable: false});
+
+      blobStream.on("error", (error) => {
+        console.error(error);
+        res.status(500).json({message: error.message});
+      });
+
+      blobStream.on("finish", async () => {
+        res.status(200).json({
+          id,
+          data: `${LOCAL ? "http" : "https"}://${req.get("host")}/api/v2/${id}`,
+        });
+      });
+
+      req.on("data", (chunk) => {
+        blobStream.write(chunk);
+        fileSize += chunk.length;
+        if (fileSize > FILE_SIZE_LIMIT) {
+          const error = {
+            message: "Data is too large.",
+            max_limit: FILE_SIZE_LIMIT,
+          };
+          blobStream.destroy();
+          console.error(error);
+          return res.status(413).json(error);
+        }
+      });
+      req.on("end", () => {
+        blobStream.end();
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({message: "Could not upload the data."});
+    }
+  }
+});*/
+
+app.post("/api/v2/post/", corsPost, async (req, res) => {
+  if (getStorageType() === "S3") {
+    try {
+      await uploadToS3();
+      res.status(200).json({ message: "Data uploaded successfully." });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Could not upload the data." });
+    }
+  } else if (getStorageType() === "GCS") {
     try {
       let fileSize = 0;
       const id = nanoid();
@@ -183,6 +280,18 @@ app.post("/api/v2/post/", corsPost, (req, res) => {
       console.error(error);
       res.status(500).json({ message: "Could not upload the data." });
     }
+  }
+
+  async function uploadToS3() {
+    const bucketName = process.env.SCALEWAY_BUCKET_NAME;
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: "gipsyKings.txt", // TROUVER COMMENT EN FAIRE DES VARIABLES
+      Body: "Volare", // TROUVER COMMENT EN FAIRE DES VARIABLES
+    });
+
+    const response = await client.send(command);
+    console.log(response);
   }
 });
 

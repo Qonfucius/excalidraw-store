@@ -83,15 +83,18 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
   if (getStorageType() === "S3") {
     try {
       await (async () => {
-        const streamToString = (stream: any) =>
-          new Promise((resolve, reject) => {
+        function streamToString(stream: any) {
+          return new Promise(function (resolve, reject) {
             const chunks: any = [];
-            stream.on("data", (chunk: any) => chunks.push(chunk));
+            stream.on("data", function (chunk: any) {
+              chunks.push(chunk);
+            });
             stream.on("error", reject);
-            stream.on("end", () =>
-              resolve(Buffer.concat(chunks).toString("utf8"))
-            );
+            stream.on("end", function () {
+              resolve(Buffer.concat(chunks).toString("utf8"));
+            });
           });
+        }
 
         const key = req.params.key;
 

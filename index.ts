@@ -47,8 +47,7 @@ const client = new S3Client({
 (async () => {
   const response = await client.send(new PutObjectCommand({Bucket: process.env.SCALEWAY_BUCKET_NAME,Key:"tata.txt", Body: "toto"}));
   console.log(response);
-})();
-*/
+})();*/
 
 //GET
 /*
@@ -79,7 +78,7 @@ const client = new S3Client({
   const bodyContents = await streamToString(Body);
   console.log(bodyContents);
 })();
-*/
+ */
 
 const bucket = storage.bucket(BUCKET_NAME);
 
@@ -235,11 +234,14 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
 app.post("/api/v2/post/", corsPost, async (req, res) => {
   if (getStorageType() === "S3") {
     try {
-      await uploadToS3();
+      await uploadToS3(req); // devoir transmettre req ou res
       res.status(200).json({ message: "Data uploaded successfully." });
+      console.log(res);
+      console.log(req);
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Could not upload the data." });
+      console.log(res);
     }
   } else if (getStorageType() === "GCS") {
     try {
@@ -282,12 +284,12 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
     }
   }
 
-  async function uploadToS3() {
+  async function uploadToS3(req: any) {
     const bucketName = process.env.SCALEWAY_BUCKET_NAME;
     const command = new PutObjectCommand({
       Bucket: bucketName,
-      Key: "gipsyKings.txt", // TROUVER COMMENT EN FAIRE DES VARIABLES
-      Body: "Volare", // TROUVER COMMENT EN FAIRE DES VARIABLES
+      Key: req.params.key, // RÉUSSIR À CONSOLE LOG REQ
+      Body: req.params.body, // RÉUSSIR À CONSOLE LOG REQ
     });
 
     const response = await client.send(command);

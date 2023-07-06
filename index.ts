@@ -40,19 +40,13 @@ const client = new S3Client({
 const bucket = storage.bucket(BUCKET_NAME);
 
 function getStorageType() {
-  if (
-    (process.env.SCALEWAY_BUCKET_NAME,
-    process.env.ENDPOINT,
-    process.env.REGION,
-    process.env.ACCESS_KEY_ID,
-    process.env.SECRET_ACCESS_KEY)
-  ) {
-    const storageType = "S3";
-    return storageType;
-  } else {
-    const storageType = "GCS";
-    return storageType;
-  }
+  return process.env.SCALEWAY_BUCKET_NAME &&
+    process.env.ENDPOINT &&
+    process.env.REGION &&
+    process.env.ACCESS_KEY_ID &&
+    process.env.SECRET_ACCESS_KEY
+    ? "S3"
+    : "GCS";
 }
 
 const app = express();

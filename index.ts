@@ -108,7 +108,6 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
 
           const { Body } = await client.send(command);
           const bodyContents = await streamToString(Body);
-          console.log(bodyContents);
         })();
         break;
       case "GCS":

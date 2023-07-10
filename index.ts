@@ -51,6 +51,20 @@ function getStorageType() {
   return scalewayBucketConfig ? "S3" : "GCS";
 }
 
+/*function executeS3(){
+  if (getStorageType() === 'S3'){
+    const client = new S3Client({
+      endpoint: process.env.ENDPOINT,
+      region: process.env.REGION,
+      credentials: {
+        accessKeyId: process.env.ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.SECRET_ACCESS_KEY as string,
+      },
+    });
+    return client;
+  }
+}*/
+
 const app = express();
 
 let allowOrigins = [
@@ -82,102 +96,98 @@ app.use(favicon(path.join(__dirname, "favicon.ico")));
 app.get("/", (req, res) => res.sendFile(`${process.cwd()}/index.html`));
 
 app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
-  if (getStorageType() === "S3") {
-    try {
-      await (async () => {
-        function streamToString(stream: any) {
-          return new Promise(function (resolve, reject) {
-            const chunks: any = [];
-            stream.on("data", function (chunk: any) {
-              chunks.push(chunk);
+  try {
+    switch (getStorageType()) {
+      case "S3":
+        await (async () => {
+          function streamToString(stream: any) {
+            return new Promise(function (resolve, reject) {
+              const chunks: any = [];
+              stream.on("data", function (chunk: any) {
+                chunks.push(chunk);
+              });
+              stream.on("error", reject);
+              stream.on("end", function () {
+                resolve(Buffer.concat(chunks).toString("utf8"));
+              });
             });
-            stream.on("error", reject);
-            stream.on("end", function () {
-              resolve(Buffer.concat(chunks).toString("utf8"));
-            });
+          }
+
+          const key = req.params.key;
+
+          const command = new GetObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: key,
           });
-        }
 
+          const { Body } = await client.send(command);
+          const bodyContents = await streamToString(Body);
+          console.log(bodyContents);
+        })();
+        break;
+      case "GCS":
         const key = req.params.key;
-
-        const command = new GetObjectCommand({
-          Bucket: process.env.S3_BUCKET_NAME,
-          Key: key,
-        });
-
-        const { Body } = await client.send(command);
-        const bodyContents = await streamToString(Body);
-        console.log(bodyContents);
-      })();
-    } catch (error) {
-      console.error(error);
-      res.status(404).json({ message: "Could not find the file." });
+        const file = bucket.file(key);
+        await file.getMetadata();
+        res.status(200);
+        res.setHeader("content-type", "application/octet-stream");
+        file.createReadStream().pipe(res);
+        break;
     }
-  } else if (getStorageType() === "GCS") {
-    try {
-      const key = req.params.key;
-      const file = bucket.file(key);
-      await file.getMetadata();
-      res.status(200);
-      res.setHeader("content-type", "application/octet-stream");
-      file.createReadStream().pipe(res);
-    } catch (error) {
-      console.error(error);
-      res.status(404).json({ message: "Could not find the file." });
-    }
+  } catch (error) {
+    console.error(error);
+    res.status(404).json({ message: "Could not find the file." });
   }
 });
 
 app.post("/api/v2/post/", corsPost, async (req, res) => {
-  if (getStorageType() === "S3") {
-    try {
-      await uploadToS3(req);
-      res.status(200).json({ message: "Data uploaded successfully." });
-      console.log(res);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Could not upload the data." });
-      console.log(res);
-    }
-  } else if (getStorageType() === "GCS") {
-    try {
-      let fileSize = 0;
-      const id = nanoid();
-      const blob = bucket.file(id);
-      const blobStream = blob.createWriteStream({ resumable: false });
+  try {
+    switch (getStorageType()) {
+      case "S3":
+        await uploadToS3(req);
+        res.status(200).json({ message: "Data uploaded successfully." });
+        break;
+      case "GCS":
+        let fileSize = 0;
+        const id = nanoid();
+        const blob = bucket.file(id);
+        const blobStream = blob.createWriteStream({ resumable: false });
 
-      blobStream.on("error", (error) => {
-        console.error(error);
-        res.status(500).json({ message: error.message });
-      });
-
-      blobStream.on("finish", async () => {
-        res.status(200).json({
-          id,
-          data: `${LOCAL ? "http" : "https"}://${req.get("host")}/api/v2/${id}`,
-        });
-      });
-
-      req.on("data", (chunk) => {
-        blobStream.write(chunk);
-        fileSize += chunk.length;
-        if (fileSize > FILE_SIZE_LIMIT) {
-          const error = {
-            message: "Data is too large.",
-            max_limit: FILE_SIZE_LIMIT,
-          };
-          blobStream.destroy();
+        blobStream.on("error", (error) => {
           console.error(error);
-          return res.status(413).json(error);
-        }
-      });
-      req.on("end", () => {
-        blobStream.end();
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Could not upload the data." });
+          res.status(500).json({ message: error.message });
+        });
+
+        blobStream.on("finish", async () => {
+          res.status(200).json({
+            id,
+            data: `${LOCAL ? "http" : "https"}://${req.get(
+              "host"
+            )}/api/v2/${id}`,
+          });
+        });
+
+        req.on("data", (chunk) => {
+          blobStream.write(chunk);
+          fileSize += chunk.length;
+          if (fileSize > FILE_SIZE_LIMIT) {
+            const error = {
+              message: "Data is too large.",
+              max_limit: FILE_SIZE_LIMIT,
+            };
+            blobStream.destroy();
+            console.error(error);
+            return res.status(413).json(error);
+          }
+        });
+        req.on("end", () => {
+          blobStream.end();
+        });
+        break;
     }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not upload the data." });
   }
 
   async function uploadToS3(req: any) {

@@ -39,14 +39,16 @@ const client = new S3Client({
 
 const bucket = storage.bucket(BUCKET_NAME);
 
+const scalewayBucketConfig = {
+  NAME: process.env.S3_BUCKET_NAME,
+  ENDPOINT: process.env.ENDPOINT,
+  REGION: process.env.REGION,
+  KEY_ID: process.env.ACCESS_KEY_ID,
+  ACCESS_KEY: process.env.SECRET_ACCESS_KEY,
+};
+
 function getStorageType() {
-  return process.env.SCALEWAY_BUCKET_NAME &&
-    process.env.ENDPOINT &&
-    process.env.REGION &&
-    process.env.ACCESS_KEY_ID &&
-    process.env.SECRET_ACCESS_KEY
-    ? "S3"
-    : "GCS";
+  return scalewayBucketConfig ? "S3" : "GCS";
 }
 
 const app = express();
@@ -99,7 +101,7 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
         const key = req.params.key;
 
         const command = new GetObjectCommand({
-          Bucket: process.env.SCALEWAY_BUCKET_NAME,
+          Bucket: process.env.S3_BUCKET_NAME,
           Key: key,
         });
 
@@ -179,7 +181,7 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
   }
 
   async function uploadToS3(req: any) {
-    const bucketName = process.env.SCALEWAY_BUCKET_NAME;
+    const bucketName = process.env.S3_BUCKET_NAME;
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: req.params.key,

@@ -51,20 +51,6 @@ function getStorageType() {
   return scalewayBucketConfig ? "S3" : "GCS";
 }
 
-/*function executeS3(){
-  if (getStorageType() === 'S3'){
-    const client = new S3Client({
-      endpoint: process.env.ENDPOINT,
-      region: process.env.REGION,
-      credentials: {
-        accessKeyId: process.env.ACCESS_KEY_ID as string,
-        secretAccessKey: process.env.SECRET_ACCESS_KEY as string,
-      },
-    });
-    return client;
-  }
-}*/
-
 const app = express();
 
 let allowOrigins = [

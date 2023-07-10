@@ -132,7 +132,6 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
       await uploadToS3(req);
       res.status(200).json({ message: "Data uploaded successfully." });
       console.log(res);
-      console.log(req);
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Could not upload the data." });

@@ -28,15 +28,6 @@ const storage = new Storage(
     : undefined
 );
 
-const client = new S3Client({
-  endpoint: process.env.ENDPOINT,
-  region: process.env.REGION,
-  credentials: {
-    accessKeyId: process.env.ACCESS_KEY_ID as string,
-    secretAccessKey: process.env.SECRET_ACCESS_KEY as string,
-  },
-});
-
 const bucket = storage.bucket(BUCKET_NAME);
 
 const scalewayBucketConfig = {
@@ -49,6 +40,18 @@ const scalewayBucketConfig = {
 
 function getStorageType() {
   return scalewayBucketConfig ? "S3" : "GCS";
+}
+
+function executeS3() {
+  const client = new S3Client({
+    endpoint: process.env.ENDPOINT,
+    region: process.env.REGION,
+    credentials: {
+      accessKeyId: process.env.ACCESS_KEY_ID as string,
+      secretAccessKey: process.env.SECRET_ACCESS_KEY as string,
+    },
+  });
+  return client;
 }
 
 const app = express();
@@ -86,6 +89,7 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
     switch (getStorageType()) {
       case "S3":
         await (async () => {
+          const S3bucket = executeS3();
           function streamToString(stream: any) {
             return new Promise(function (resolve, reject) {
               const chunks: any = [];
@@ -106,7 +110,7 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
             Key: key,
           });
 
-          const { Body } = await client.send(command);
+          const { Body } = await S3bucket.send(command);
           const bodyContents = await streamToString(Body);
         })();
         break;
@@ -176,6 +180,7 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
   }
 
   async function uploadToS3(req: any) {
+    const S3bucket = executeS3();
     const bucketName = process.env.S3_BUCKET_NAME;
     const command = new PutObjectCommand({
       Bucket: bucketName,
@@ -183,7 +188,7 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
       Body: req.params.body,
     });
 
-    const response = await client.send(command);
+    const response = await S3bucket.send(command);
     console.log(response);
   }
 });

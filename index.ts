@@ -54,6 +54,19 @@ function executeS3() {
   return client;
 }
 
+function streamToString(stream: any) {
+  return new Promise(function (resolve, reject) {
+    const chunks: any = [];
+    stream.on("data", function (chunk: any) {
+      chunks.push(chunk);
+    });
+    stream.on("error", reject);
+    stream.on("end", function () {
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+  });
+}
+
 const app = express();
 
 let allowOrigins = [
@@ -90,26 +103,11 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
       case "S3":
         await (async () => {
           const S3bucket = executeS3();
-          function streamToString(stream: any) {
-            return new Promise(function (resolve, reject) {
-              const chunks: any = [];
-              stream.on("data", function (chunk: any) {
-                chunks.push(chunk);
-              });
-              stream.on("error", reject);
-              stream.on("end", function () {
-                resolve(Buffer.concat(chunks).toString("utf8"));
-              });
-            });
-          }
-
           const key = req.params.key;
-
           const command = new GetObjectCommand({
             Bucket: process.env.S3_BUCKET_NAME,
             Key: key,
           });
-
           const { Body } = await S3bucket.send(command);
           const bodyContents = await streamToString(Body);
         });
@@ -191,6 +189,8 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
     const response = await S3bucket.send(command);
     console.log(response);
   }
+
+  async;
 });
 
 const port = process.env.PORT || 8080;

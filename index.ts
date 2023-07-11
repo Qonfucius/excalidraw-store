@@ -112,7 +112,7 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
 
           const { Body } = await S3bucket.send(command);
           const bodyContents = await streamToString(Body);
-        })();
+        });
         break;
       case "GCS":
         const key = req.params.key;

@@ -189,8 +189,6 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
     const response = await S3bucket.send(command);
     console.log(response);
   }
-
-  async;
 });
 
 const port = process.env.PORT || 8080;

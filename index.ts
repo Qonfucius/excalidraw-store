@@ -84,19 +84,31 @@ const corsPost = cors((req, callback) => {
 app.use(favicon(path.join(__dirname, "favicon.ico")));
 app.get("/", (req, res) => res.sendFile(`${process.cwd()}/index.html`));
 
+console.log(getStorageType(), typeof getStorageType());
 app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
   try {
     switch (getStorageType()) {
       case "S3":
-        await (async () => {
-          const S3bucket = executeS3();
-          const key = req.params.key;
-          const command = new GetObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: key,
+        const S3bucket = executeS3();
+        const s3key = req.params.key;
+        const streamToString = (stream: any) =>
+          new Promise((resolve, reject) => {
+            const chunks: any = [];
+            stream.on("data", (chunk: any) => chunks.push(chunk));
+            stream.on("error", reject);
+            stream.on("end", () =>
+              resolve(Buffer.concat(chunks).toString("utf8"))
+            );
           });
-          await S3bucket.send(command);
+
+        const command = new GetObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME,
+          Key: s3key,
         });
+
+        const { Body } = await S3bucket.send(command);
+        const bodyContents = await streamToString(Body);
+        console.log(bodyContents);
         break;
       case "GCS":
         const key = req.params.key;

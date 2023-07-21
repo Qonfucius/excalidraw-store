@@ -54,19 +54,6 @@ function executeS3() {
   return client;
 }
 
-function streamToString(stream: any) {
-  return new Promise(function (resolve, reject) {
-    const chunks: any = [];
-    stream.on("data", function (chunk: any) {
-      chunks.push(chunk);
-    });
-    stream.on("error", reject);
-    stream.on("end", function () {
-      resolve(Buffer.concat(chunks).toString("utf8"));
-    });
-  });
-}
-
 const app = express();
 
 let allowOrigins = [
@@ -108,8 +95,7 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
             Bucket: process.env.S3_BUCKET_NAME,
             Key: key,
           });
-          const { Body } = await S3bucket.send(command);
-          const bodyContents = await streamToString(Body);
+          await S3bucket.send(command);
         });
         break;
       case "GCS":
@@ -123,11 +109,11 @@ app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
     }
   } catch (error) {
     console.error(error);
-    res.status(404).json({ message: "Could not find the file." });
+    res.status(404).json({ message: error.message });
   }
 });
 
-app.post("/api/v2/post/", corsPost, async (req, res) => {
+app.post("/api/v2/post/:key/data", corsPost, async (req, res) => {
   try {
     switch (getStorageType()) {
       case "S3":
@@ -174,7 +160,7 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
     }
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Could not upload the data." });
+    res.status(500).json({ message: error.message });
   }
 
   async function uploadToS3(req: any) {
@@ -183,11 +169,10 @@ app.post("/api/v2/post/", corsPost, async (req, res) => {
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: req.params.key,
-      Body: req.params.body,
+      Body: req.body,
     });
 
-    const response = await S3bucket.send(command);
-    console.log(response);
+    await S3bucket.send(command);
   }
 });
 

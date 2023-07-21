@@ -84,7 +84,6 @@ const corsPost = cors((req, callback) => {
 app.use(favicon(path.join(__dirname, "favicon.ico")));
 app.get("/", (req, res) => res.sendFile(`${process.cwd()}/index.html`));
 
-console.log(getStorageType(), typeof getStorageType());
 app.get("/api/v2/:key", corsGet, async (req: any, res: any) => {
   try {
     switch (getStorageType()) {
